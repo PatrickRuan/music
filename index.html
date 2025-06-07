@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Ear Training Practice</title>
+<style>
+  body { font-family: Arial, sans-serif; text-align: center; }
+  #staff { border: 1px solid #000; margin: 10px auto; display: block; }
+  #answers button { margin: 5px; }
+  #piano { display: inline-block; position: relative; }
+  .white { width: 40px; height: 150px; background: #fff; border: 1px solid #000; display: inline-block; position: relative; }
+  .black { width: 25px; height: 90px; background: #000; position: absolute; top: 0; z-index: 1; margin-left: -12px; }
+</style>
+</head>
+<body>
+<h1>Ear Training Practice</h1>
+<select id="mode">
+  <option value="1">Mode 1: Higher note</option>
+  <option value="2">Mode 2: Identify note</option>
+  <option value="3">Mode 3: Note to Piano</option>
+</select>
+<button id="start">Start</button>
+<div id="question"></div>
+<canvas id="staff" width="400" height="200"></canvas>
+<div id="answers"></div>
+<div id="piano"></div>
+<div id="score"></div>
+<script>
+(function(){
+  const AudioContext = window.AudioContext || window.webkitAudioContext;
+  const audioCtx = new AudioContext();
+  const notes = ["Do","Re","Mi","Fa","So","La","Si"];
+  const semitones = {Do:0,Re:2,Mi:4,Fa:5,So:7,La:9,Si:11};
+  function freq(name){
+    const base = 261.63; // C4
+    return base * Math.pow(2,(semitones[name]-0)/12);
+  }
+  function playTone(name){
+    const osc = audioCtx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.value = freq(name);
+    osc.connect(audioCtx.destination);
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.6);
+  }
+  const staff = document.getElementById('staff');
+  const ctx = staff.getContext('2d');
+  function drawStaff(){
+    ctx.clearRect(0,0,staff.width,staff.height);
+    for(let i=0;i<5;i++){
+      ctx.beginPath();
+      ctx.moveTo(10,40+i*20);
+      ctx.lineTo(390,40+i*20);
+      ctx.stroke();
+    }
+  }
+  function noteY(name){
+    const positions = {Do:120,Re:110,Mi:100,Fa:90,So:80,La:70,Si:60};
+    return positions[name];
+  }
+  function drawNote(x,name){
+    ctx.beginPath();
+    ctx.arc(x,noteY(name),8,0,Math.PI*2);
+    ctx.fill();
+  }
+  let mode=1,score=0,q=0,questions=[];
+  document.getElementById('start').onclick=start;
+  function start(){
+    mode = Number(document.getElementById('mode').value);
+    score=0;q=0;questions=[];
+    document.getElementById('score').textContent='';
+    drawStaff();
+    if(mode===1){
+      nextM1();
+    }else if(mode===2){
+      document.getElementById('question').textContent='Reference: Do';
+      playTone('Do');
+      setTimeout(nextM2,700);
+    }else if(mode===3){
+      setupPiano();
+      nextM3();
+    }
+  }
+  function nextM1(){
+    if(q>=10){
+      document.getElementById('score').textContent='Score: '+score+'/10';
+      return;
+    }
+    q++;
+    drawStaff();
+    let a = notes[Math.floor(Math.random()*7)];
+    let b = notes[Math.floor(Math.random()*7)];
+    drawNote(150,a);
+    drawNote(250,b);
+    playTone(a);
+    setTimeout(()=>playTone(b),700);
+    const ans = a===b?0:(semitones[a]>semitones[b]?1:2);
+    document.getElementById('answers').innerHTML='<button id="left">Left</button><button id="right">Right</button>';
+    document.getElementById('left').onclick=()=>{if(ans===1)score++;nextM1();};
+    document.getElementById('right').onclick=()=>{if(ans===2)score++;nextM1();};
+  }
+  function nextM2(){
+    if(q>=10){
+      document.getElementById('score').textContent='Score: '+score+'/10';
+      document.getElementById('answers').innerHTML='';
+      return;
+    }
+    q++;
+    drawStaff();
+    let n = notes[Math.floor(Math.random()*7)];
+    drawNote(200,n);
+    playTone(n);
+    document.getElementById('answers').innerHTML=notes.map(nm=>'<button class="ans" data-n="'+nm+'">'+nm+'</button>').join('');
+    Array.from(document.querySelectorAll('.ans')).forEach(btn=>{
+      btn.onclick=()=>{if(btn.dataset.n===n)score++;nextM2();};
+    });
+  }
+  let m3Notes=[],m3Index=0,startTime;
+  function setupPiano(){
+    const piano = document.getElementById('piano');
+    piano.innerHTML='';
+    const whiteOrder=['C','D','E','F','G','A','B'];
+    for(let o=3;o<=5;o++){
+      whiteOrder.forEach((w,i)=>{
+        const div=document.createElement('div');
+        div.className='white';
+        div.dataset.note=w+o;
+        div.style.left=(whiteOrder.indexOf(w)+7*(o-3))*41+'px';
+        piano.appendChild(div);
+        const blacks={'C':'C#','D':'D#','F':'F#','G':'G#','A':'A#'};
+        const b=blacks[w];
+        if(b){
+          const bd=document.createElement('div');
+          bd.className='black';
+          bd.dataset.note=b+o;
+          bd.style.left=(whiteOrder.indexOf(w)+7*(o-3))*41+30+'px';
+          piano.appendChild(bd);
+        }
+      });
+    }
+    Array.from(piano.children).forEach(key=>{
+      key.onclick=()=>{
+        const note=key.dataset.note;
+        checkM3(note);
+      };
+    });
+  }
+  function nextM3(){
+    m3Notes=[];m3Index=0;startTime=null;
+    drawStaff();
+    for(let i=0;i<20;i++){
+      const opts=['Do','Re','Mi','Fa','So','La','Si'];
+      const n=opts[Math.floor(Math.random()*7)];
+      m3Notes.push(n);
+      drawNote(20+i*18,n);
+    }
+    document.getElementById('question').textContent='Click corresponding piano key';
+  }
+  function checkM3(note){
+    if(m3Index>=m3Notes.length)return;
+    if(!startTime)startTime=Date.now();
+    const map={'C3':'Do','D3':'Re','E3':'Mi','F3':'Fa','G3':'So','A3':'La','B3':'Si',
+               'C4':'Do','D4':'Re','E4':'Mi','F4':'Fa','G4':'So','A4':'La','B4':'Si',
+               'C5':'Do','D5':'Re','E5':'Mi','F5':'Fa','G5':'So','A5':'La','B5':'Si'};
+    if(map[note]===m3Notes[m3Index]){
+      m3Index++;
+      if(m3Index===m3Notes.length){
+        const t=((Date.now()-startTime)/1000).toFixed(2);
+        document.getElementById('score').textContent='Time: '+t+'s';
+      }
+    }
+  }
+})();
+</script>
+</body>
+</html>
